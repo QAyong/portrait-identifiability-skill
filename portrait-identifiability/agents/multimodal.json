@@ -1,0 +1,35 @@
+{
+  "multimodal": {
+    "provider": "openai",
+    "startup_detection": {
+      "prefer_agent_native": true,
+      "agent_capability_env": "PORTRAIT_AGENT_MULTIMODAL"
+    },
+    "debug": {
+      "save_raw_response": false,
+      "raw_response_dir": "portrait-identifiability/debug/multimodal"
+    },
+    "providers": {
+      "agent_native": {
+        "enabled": true,
+        "notes": "Codex skill workflow can use the agent's built-in multimodal understanding when PORTRAIT_AGENT_MULTIMODAL=true is detected before running model-dependent steps."
+      },
+      "doubao": {
+        "enabled": true,
+        "api_key_env": "DOUBAO_API_KEY",
+        "base_url_env": "DOUBAO_BASE_URL",
+        "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+        "model_env": "DOUBAO_VISION_MODEL",
+        "model": "doubao-seed-2-0-pro-260215"
+      },
+      "openai": {
+        "enabled": true,
+        "api_key_env": "OPENAI_API_KEY",
+        "base_url_env": "OPENAI_BASE_URL",
+        "base_url": null,
+        "model_env": "OPENAI_VISION_MODEL",
+        "model": "gpt-4.1-mini"
+      }
+    }
+  }
+}

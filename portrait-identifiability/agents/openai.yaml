@@ -1,0 +1,4 @@
+interface:
+  display_name: "Portrait Identifiability"
+  short_description: "Portrait risk and virtual face clearance"
+  default_prompt: "Use $portrait-identifiability to assess portrait identifiability risk for these images and produce a review-ready report."

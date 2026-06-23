@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Test outputs
+out/
+test-clearance/
+test-clearance2/
+test-e2e-2imgs/
+test-e2e-candidates/
+test-mm/
+test-mm2/
+reverse-candidates-face1/
+edge-cdp-profile-google-test/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Generated reports
+clearance-output/
