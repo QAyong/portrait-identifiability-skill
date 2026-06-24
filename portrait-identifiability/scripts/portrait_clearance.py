@@ -160,6 +160,7 @@ def run_portrait_clearance(
     concurrency=10,
     fail_fast=False,
     retries=3,
+    export_docx=False,
 ):
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -256,14 +257,16 @@ def run_portrait_clearance(
         multimodal_provider=provider_info,
         total_pairs=len(results),
     )
-    docx_path = save_docx_report(
-        query_image=query_image,
-        results=results,
-        output_dir=out_dir,
-        multimodal_provider=provider_info,
-        total_pairs=len(results),
-    )
-    output = {"mode": "portrait_clearance", "status": "success", "query_image": str(Path(query_image).resolve()), "output_dir": str(out_dir.resolve()), "total_pairs_compared": len(results), "multimodal_enabled": _use_mm, "vision_provider": vision_provider, "multimodal_detection": {"source": detection.source if detection else "not_checked", "message": detection.message if detection else ""}, "results": results, "report_md_path": str(report_path), "report_html_path": str(html_path), "report_docx_path": str(docx_path), "report_json_path": str(out_dir / "clearance-result.json")}
+    docx_path = None
+    if export_docx:
+        docx_path = save_docx_report(
+            query_image=query_image,
+            results=results,
+            output_dir=out_dir,
+            multimodal_provider=provider_info,
+            total_pairs=len(results),
+        )
+    output = {"mode": "portrait_clearance", "status": "success", "query_image": str(Path(query_image).resolve()), "output_dir": str(out_dir.resolve()), "total_pairs_compared": len(results), "multimodal_enabled": _use_mm, "vision_provider": vision_provider, "multimodal_detection": {"source": detection.source if detection else "not_checked", "message": detection.message if detection else ""}, "results": results, "report_md_path": str(report_path), "report_html_path": str(html_path), "report_docx_path": str(docx_path) if docx_path else None, "report_json_path": str(out_dir / "clearance-result.json")}
     save_json(out_dir / "clearance-result.json", output)
     return output
 
@@ -286,12 +289,13 @@ def main():
     parser.add_argument("--concurrency", type=int, default=10, help="多模态 API 并发线程数（默认 10）")
     parser.add_argument("--fail-fast", action="store_true", help="启用多模态时任一比对失败立即终止其余任务")
     parser.add_argument("--retries", type=int, default=3, help="单次多模态 API 调用的最大重试次数（429/超时）")
+    parser.add_argument("--export-docx", action="store_true", help="额外导出 .docx Word 报告")
     args = parser.parse_args()
     if args.use_multimodal or args.use_openai:
         detection = detect_provider(args.vision_provider, args.multimodal_config)
         print_provider_detection(detection)
         print()
-    result = run_portrait_clearance(args.query_image, reference_image=args.reference, candidates_file=args.candidates_file, candidate_dir=args.candidate_dir, output_dir=args.output_dir, use_multimodal=args.use_multimodal, use_openai=args.use_openai, vision_provider=args.vision_provider, multimodal_config=args.multimodal_config, model=args.model, model_pack=args.model_pack, det_size=args.det_size, max_candidates=args.max_candidates, concurrency=args.concurrency, fail_fast=args.fail_fast, retries=args.retries)
+    result = run_portrait_clearance(args.query_image, reference_image=args.reference, candidates_file=args.candidates_file, candidate_dir=args.candidate_dir, output_dir=args.output_dir, use_multimodal=args.use_multimodal, use_openai=args.use_openai, vision_provider=args.vision_provider, multimodal_config=args.multimodal_config, model=args.model, model_pack=args.model_pack, det_size=args.det_size, max_candidates=args.max_candidates, concurrency=args.concurrency, fail_fast=args.fail_fast, retries=args.retries, export_docx=args.export_docx)
     if result["status"] == "error":
         print("错误: " + str(result.get("error")))
         sys.exit(1)
@@ -305,8 +309,10 @@ def main():
     # 输出 HTML 报告路径
     if "report_html_path" in result:
         print("  HTML: " + str(result["report_html_path"]))
-    if "report_docx_path" in result:
+    if result.get("report_docx_path"):
         print("  DOCX: " + str(result["report_docx_path"]))
+    else:
+        print("  提示：添加 --export-docx 可额外导出 Word (.docx) 报告")
 
 if __name__ == "__main__":
     main()
