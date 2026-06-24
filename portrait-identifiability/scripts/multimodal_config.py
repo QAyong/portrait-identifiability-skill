@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """multimodal_config - 多模态模型配置与启动自检"""
 from __future__ import annotations
-import io, json, os, sys
+import io, json, os, sys, threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -119,13 +119,19 @@ def detect_provider(requested_provider=None, config_path=None):
                 message="检测到 " + pname + " 已配置，使用模型：" + str(model) + "。",
             )
 
+    # 收集各提供方的 API Key 申请地址
+    api_key_urls = []
+    for pname in ["openai", "doubao"]:
+        pcfg = providers_config.get(pname, {})
+        if pcfg.get("enabled", True) and pcfg.get("api_key_url"):
+            api_key_urls.append(pname + " API Key 获取: " + pcfg["api_key_url"])
     default_provider = config.get("provider", "openai")
     def_cfg = providers_config.get(default_provider, {})
     def_api_env = def_cfg.get("api_key_env", default_provider.upper() + "_API_KEY")
     return ProviderDetection(
         provider=None, source="config_default",
         message="未检测到可用的多模态模型密钥。默认提供方：" + default_provider + "。",
-        recommendations=["设置 " + def_api_env + " 环境变量。", "或 set PORTRAIT_AGENT_MULTIMODAL=true 使用 agent 自带能力。"],
+        recommendations=["设置 " + def_api_env + " 环境变量。", "或 set PORTRAIT_AGENT_MULTIMODAL=true 使用 agent 自带能力。"] + api_key_urls,
     )
 
 
@@ -136,7 +142,17 @@ def resolve_provider(requested_provider=None, model=None, config_path=None):
         detection = detect_provider(config_path=config_path)
         if detection.provider:
             return detection.provider
-        raise RuntimeError("无法自动检测多模态提供方。请设置 OPENAI_API_KEY 或 DOUBAO_API_KEY。")
+        providers_check = config.get("providers", {})
+        urls = []
+        for pn in ["openai", "doubao"]:
+            pc = providers_check.get(pn, {})
+            if pc.get("enabled", True) and pc.get("api_key_url"):
+                urls.append(pn + ": " + pc["api_key_url"])
+        url_hint = "\n".join(urls)
+        msg = "无法自动检测多模态提供方。请设置 OPENAI_API_KEY 或 DOUBAO_API_KEY。"
+        if url_hint:
+            msg += "\nAPI Key 获取地址:\n" + url_hint
+        raise RuntimeError(msg)
     if provider_name == "agent_native":
         raise RuntimeError("agent_native 需要由 Codex skill agent 在脚本外处理。")
     providers = config.get("providers", {})
@@ -151,7 +167,11 @@ def resolve_provider(requested_provider=None, model=None, config_path=None):
     resolved_model = model or _resolve_credential(pcfg.get("model_env", ""), pcfg.get("model"), provider_name, "model")
     base_url = _resolve_credential(pcfg.get("base_url_env", ""), pcfg.get("base_url"), provider_name, "base_url")
     if not api_key:
-        raise ValueError(provider_name + " API key is not configured.")
+        key_url = pcfg.get("api_key_url", "")
+        msg = provider_name + " API key is not configured."
+        if key_url:
+            msg += " 获取地址: " + key_url
+        raise ValueError(msg)
     if not resolved_model:
         raise ValueError(provider_name + " vision model is not configured.")
     return VisionProvider(
@@ -161,12 +181,26 @@ def resolve_provider(requested_provider=None, model=None, config_path=None):
     )
 
 
+_RAW_RESPONSE_SEQ_LOCK = threading.Lock()
+_RAW_RESPONSE_SEQ: dict[str, int] = {}
+
+
 def save_raw_response_if_debug(provider, payload, prefix):
     if not provider.save_raw_response:
         return None
     provider.raw_response_dir.mkdir(parents=True, exist_ok=True)
-    existing = sorted(provider.raw_response_dir.glob(prefix + "-*.json"))
-    path = provider.raw_response_dir / (prefix + "-" + str(len(existing) + 1).zfill(4) + ".json")
+    with _RAW_RESPONSE_SEQ_LOCK:
+        seq = _RAW_RESPONSE_SEQ.get(prefix, 0)
+        existing = sorted(provider.raw_response_dir.glob(prefix + "-*.json"))
+        if existing:
+            last = existing[-1].stem
+            try:
+                seq = max(seq, int(last.rsplit("-", 1)[-1]))
+            except ValueError:
+                pass
+        seq += 1
+        _RAW_RESPONSE_SEQ[prefix] = seq
+        path = provider.raw_response_dir / (prefix + "-" + str(seq).zfill(4) + ".json")
     save_json(path, payload)
     return str(path)
 

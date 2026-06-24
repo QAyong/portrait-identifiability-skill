@@ -27,6 +27,11 @@ Skill 启动时自动检测多模态能力，按以下优先级:
 2. OPENAI_API_KEY 或 DOUBAO_API_KEY 已设置 - 使用对应 API
 3. 都没有 - 降级为仅本地 InsightFace 指标，提示用户配置
 
+### API Key 获取地址
+
+- **豆包 (Doubao)**: https://console.volcengine.com/ark/region:ark+cn-beijing/model/detail?Id=doubao-seed-2-0-pro
+- **OpenAI**: https://platform.openai.com/api-keys
+
 ## 主入口: portrait_clearance
 
 用法示例:
@@ -50,6 +55,7 @@ python portrait-identifiability/scripts/portrait_clearance.py query.png -r ref.p
 - face_engine.py             InsightFace 人脸引擎
 - common.py                  公共工具
 - prepare_search_image.py    为百度识图裁剪人脸图
+- dedup_candidates.py       候选图前置去重（字节 + pHash 视觉近似，默认快速；--use-face 启用 ArcFace 双条件）
 - collect_reverse_image_candidates.py  百度识图聚合采集器
 - baidu_image_search_playwright.py     百度识图 Playwright 采集器
 - virtual_face_clearance.py  兼容包装器
@@ -71,13 +77,28 @@ python portrait-identifiability/scripts/portrait_clearance.py query.png -r ref.p
 方法：从 stdout 输出中提取 `HTML: <path>` 行，获取报告路径，
 然后使用 `browser:control-in-app-browser` skill 打开 `file:///<path>`。
 
+脚本本身不再调用系统浏览器（已移除 `webbrowser.open`），Agent 不要改用 `os.startfile` / `Start-Process` / `webbrowser` 等方式打开外部浏览器，必须通过内置浏览器 skill 展示报告。
+
 用户无需手动打开文件，报告应直接展示在 Codex 侧边栏浏览器中。
 
-## 外部上传确认
+## 百度识图候选去重
 
-使用百度识图前需确认用户授权。优先一次性确认本次任务:
+使用 `collect_reverse_image_candidates.py` 采集百度识图候选后，会对候选图做前置去重，去掉同一张照片的重复变体（缩略图/压缩/格式变体），只保留最清晰一张；撞脸的不同照片不会误并。去重结果写入 `manifest.json` 的 `dedup_stats`（含去重前后数量、被丢弃项及原因）和 `dedup_notice`。
 
-> 请确认是否允许将本次提供的全部图片上传到百度识图进行测试。
+去重提供两种视觉模式，执行百度识图采集前 Agent 应向用户说明区别并由用户选择：
+
+| 模式 | 速度 | 原理 | 适用场景 |
+|------|------|------|--------|
+| **pHash 快速模式**（默认） | 30~40 张约 1 秒 | 感知哈希衡量整图相似度，同图变体距离 0~2、撞脸不同照 24+ | 绝大多数场景，推荐优先使用 |
+| **ArcFace 双条件模式**（`--use-face-dedup`） | 30~40 张约 90 秒 | pHash 基础上叠加人脸 embedding 确认（需 InsightFace，CPU 每张约 2.4 秒） | 对去重精度有更高要求、不介意等待时选择 |
+
+两种模式第一层字节去重（完全相同文件）相同，区别仅在第二层视觉去重。Agent 提示示例：「百度识图候选支持两种去重模式——pHash 快速模式约 1 秒，ArcFace 双条件模式约 90 秒但更稳，默认用快速模式，需要更稳的请说明。」
+
+## 百度识图上传约定
+
+本 Skill 的百度识图、反向图片搜索、外部候选采集和相关测试用例默认包含外部上传动作。用户触发这些能力时，视为已授权上传任务所需图片；不要再将上传确认作为阻塞步骤。
+
+执行时直接说明将使用外部检索链路并继续操作。若外部服务失败、验证码阻断、网络不可用或页面结构变化，再报告失败原因并给出替代方案。
 
 ## 安全措辞
 

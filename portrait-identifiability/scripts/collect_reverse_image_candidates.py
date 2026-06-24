@@ -9,6 +9,7 @@ from typing import Any
 
 from baidu_image_search_playwright import collect_baidu_candidates
 from common import print_json, save_json
+from dedup_candidates import dedup_candidates
 
 
 def _copy_merged_candidates(candidates: list[dict[str, Any]], output_dir: Path) -> list[dict[str, Any]]:
@@ -48,12 +49,14 @@ def collect_all_candidates(
     slow_mo: int = 100,
     google_timeout_ms: int = 20000,
     skip_google: bool = False,
+    use_face_dedup: bool = False,
 ) -> dict[str, Any]:
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     sources: dict[str, Any] = {}
     all_candidates: list[dict[str, Any]] = []
+    dedup_stats: dict[str, Any] = {}
 
     baidu_manifest = collect_baidu_candidates(
         image,
@@ -72,6 +75,11 @@ def collect_all_candidates(
     }
     all_candidates.extend(baidu_manifest.get("candidates", []))
 
+    # 前置去重：字节级 + pHash 视觉近似（默认快速）；use_face_dedup=True 时启用 ArcFace 双条件
+    dedup_result = dedup_candidates(all_candidates, use_face=use_face_dedup)
+    all_candidates = dedup_result["deduped"]
+    dedup_stats = dedup_result["stats"]
+
     if google_cdp_endpoint or google_timeout_ms != 20000 or skip_google:
         sources["google_lens"] = {
             "status": "disabled",
@@ -88,6 +96,8 @@ def collect_all_candidates(
         "sources": sources,
         "candidate_count": len(merged),
         "candidates": merged,
+        "dedup_stats": dedup_stats,
+        "dedup_notice": "已对候选图执行前置去重：同一张照片的缩略图/压缩/格式变体只保留最清晰一张，撞脸的不同照片保留不动。当前模式见 dedup_stats.use_face（False=pHash 快速模式，True=ArcFace 双条件模式）。",
         "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
     save_json(out_dir / "manifest.json", manifest)
@@ -108,6 +118,7 @@ def main() -> None:
     parser.add_argument("--slow-mo", type=int, default=100)
     parser.add_argument("--google-timeout-ms", type=int, default=20000, help="已停用，仅保留兼容旧命令。")
     parser.add_argument("--skip-google", action="store_true", help="已停用，仅保留兼容旧命令；当前始终只使用百度识图。")
+    parser.add_argument("--use-face-dedup", action="store_true", help="去重时启用 ArcFace 双条件（更稳但慢，需 InsightFace）；默认纯 pHash 快速模式")
     args = parser.parse_args()
 
     result = collect_all_candidates(
@@ -122,6 +133,7 @@ def main() -> None:
         slow_mo=args.slow_mo,
         google_timeout_ms=args.google_timeout_ms,
         skip_google=args.skip_google,
+        use_face_dedup=args.use_face_dedup,
     )
     print_json(result)
 

@@ -14,6 +14,7 @@ import io
 import json
 import re
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -94,8 +95,13 @@ def local_precheck(
     image_b: str | Path,
     model_pack: str = "buffalo_l",
     det_size: int = 640,
+    query_cache: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """用 InsightFace 对两张图做人脸检测、质量评估、embedding 提取。
+
+    Args:
+        query_cache: 可选，查询图(image_a)的预计算结果，避免对同一查询图重复检测。
+            需包含 img/quality/faces 三个键。
 
     返回:
         faces_a/b: 检测到的人脸数量
@@ -104,13 +110,18 @@ def local_precheck(
         reliability_issues: 可靠性问题列表
         can_extract_embedding: 双方是否都能提取有效 embedding
     """
-    img_a = read_image(image_a)
+    if query_cache:
+        img_a = query_cache["img"]
+        quality_a = query_cache["quality"]
+        faces_a = query_cache["faces"]
+    else:
+        img_a = read_image(image_a)
+        quality_a = image_quality(img_a)
+        faces_a = detect_faces(img_a, model_pack=model_pack, det_size=det_size)
     img_b = read_image(image_b)
 
-    quality_a = image_quality(img_a)
     quality_b = image_quality(img_b)
 
-    faces_a = detect_faces(img_a, model_pack=model_pack, det_size=det_size)
     faces_b = detect_faces(img_b, model_pack=model_pack, det_size=det_size)
 
     best_a = select_best_face(faces_a)
@@ -246,6 +257,9 @@ def multimodal_compare(
     provider: str | None = None,
     model: str | None = None,
     config_path: str | Path | None = None,
+    retries: int = 3,
+    retry_base_delay: float = 2.0,
+    shared_client: Any = None,
 ) -> dict[str, Any]:
     """统一多模态比对：一次 API 调用完成成分判定 + Path A/B 分析。
 
@@ -255,11 +269,13 @@ def multimodal_compare(
         provider: 模型提供方 (openai/doubao/agent_native)
         model: 指定模型名
         config_path: 多模态配置文件路径
+        retries: 遇到可重试错误（429/超时/连接错误）时的最大重试次数
+        retry_base_delay: 指数退避基础延迟秒数，实际等待 = base * 2^attempt
 
     Returns:
         结构化对比结果 JSON
     """
-    from openai import OpenAI
+    from openai import OpenAI, APIConnectionError, APIError, APITimeoutError, RateLimitError
 
     vision_provider: VisionProvider = resolve_provider(provider, model=model, config_path=config_path)
 
@@ -269,25 +285,52 @@ def multimodal_compare(
             "脚本运行时请使用 --vision-provider openai 或 doubao。"
         )
 
-    client_kwargs: dict[str, Any] = {"api_key": vision_provider.api_key}
-    if vision_provider.base_url:
-        client_kwargs["base_url"] = vision_provider.base_url
-    client = OpenAI(**client_kwargs)
+    if shared_client is not None:
+        client = shared_client
+    else:
+        client_kwargs: dict[str, Any] = {"api_key": vision_provider.api_key}
+        if vision_provider.base_url:
+            client_kwargs["base_url"] = vision_provider.base_url
+        client = OpenAI(**client_kwargs)
 
     prompt = _build_unified_prompt(precheck)
-    response = client.responses.create(
-        model=vision_provider.model,
-        input=[
-            {
-                "role": "user",
-                "content": [
-                    {"type": "input_image", "image_url": data_url_for_image(image_a)},
-                    {"type": "input_image", "image_url": data_url_for_image(image_b)},
-                    {"type": "input_text", "text": prompt},
-                ],
-            }
-        ],
-    )
+    content = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "input_image", "image_url": data_url_for_image(image_a)},
+                {"type": "input_image", "image_url": data_url_for_image(image_b)},
+                {"type": "input_text", "text": prompt},
+            ],
+        }
+    ]
+    last_exc: Exception | None = None
+    response = None
+    for attempt in range(retries + 1):
+        try:
+            response = client.responses.create(
+                model=vision_provider.model,
+                input=content,
+            )
+            break
+        except (RateLimitError, APITimeoutError, APIConnectionError) as exc:
+            last_exc = exc
+            if attempt >= retries:
+                break
+            time.sleep(retry_base_delay * (2 ** attempt))
+        except APIError as exc:
+            # 仅对 5xx / 连接类错误重试；4xx（非 429）直接抛出
+            status = getattr(exc, "status_code", None)
+            if status is not None and 400 <= status < 500 and status != 429:
+                raise
+            last_exc = exc
+            if attempt >= retries:
+                break
+            time.sleep(retry_base_delay * (2 ** attempt))
+    if response is None:
+        if last_exc is not None:
+            raise last_exc
+        raise RuntimeError("multimodal_compare: no response and no exception captured.")
     text = getattr(response, "output_text", None) or str(response)
     raw_response_path = save_raw_response_if_debug(
         vision_provider,
@@ -324,6 +367,9 @@ def compare_images(
     model: str | None = None,
     model_pack: str = "buffalo_l",
     det_size: int = 640,
+    query_cache: dict[str, Any] | None = None,
+    shared_client: Any = None,
+    retries: int = 3,
 ) -> dict[str, Any]:
     """编排完整的图片比对流程。
 
@@ -343,7 +389,7 @@ def compare_images(
     Returns:
         完整比对结果字典，包含 local_precheck 和（可选的）ai_visual_comparison
     """
-    precheck = local_precheck(image_a, image_b, model_pack=model_pack, det_size=det_size)
+    precheck = local_precheck(image_a, image_b, model_pack=model_pack, det_size=det_size, query_cache=query_cache)
 
     if not (use_multimodal or use_openai):
         # 仅本地指标
@@ -379,6 +425,7 @@ def compare_images(
     ai = multimodal_compare(
         image_a, image_b, precheck,
         provider=vision_provider, model=model, config_path=config_path,
+        shared_client=shared_client, retries=retries,
     )
 
     return {

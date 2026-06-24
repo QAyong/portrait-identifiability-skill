@@ -20,7 +20,8 @@
         "base_url_env": "DOUBAO_BASE_URL",
         "base_url": "https://ark.cn-beijing.volces.com/api/v3",
         "model_env": "DOUBAO_VISION_MODEL",
-        "model": "doubao-seed-2-0-pro-260215"
+        "model": "doubao-seed-2-0-pro-260215",
+        "api_key_url": "https://console.volcengine.com/ark/region:ark+cn-beijing/model/detail?Id=doubao-seed-2-0-pro"
       },
       "openai": {
         "enabled": true,
@@ -28,7 +29,8 @@
         "base_url_env": "OPENAI_BASE_URL",
         "base_url": null,
         "model_env": "OPENAI_VISION_MODEL",
-        "model": "gpt-4.1-mini"
+        "model": "gpt-4.1-mini",
+        "api_key_url": "https://platform.openai.com/api-keys"
       }
     }
   }

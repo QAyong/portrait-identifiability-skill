@@ -103,6 +103,20 @@ body {
 .summary-card .summary-info .verdict.low { background: var(--risk-low-bg); color: var(--risk-low); }
 .summary-card .summary-info .verdict.low_to_medium { background: var(--risk-lowmid-bg); color: var(--risk-lowmid); }
 .summary-card .summary-info .verdict.unable_to_determine { background: var(--risk-undetermined-bg); color: var(--risk-undetermined); }
+.summary-card .summary-info .verdict-reasons {
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.summary-card .summary-info .verdict-reasons strong { color: var(--text); }
+.summary-card .summary-info .verdict-reasons ul {
+  margin-top: 4px;
+  padding-left: 18px;
+}
 
 /* ── Risk distribution ── */
 .risk-dist { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
@@ -133,14 +147,22 @@ body {
 }
 .comp-card .comp-header .comp-title { font-weight: 600; font-size: 15px; }
 .comp-card .comp-images {
-  display: flex; gap: 16px; margin-bottom: 16px;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
 }
 .comp-card .comp-images .img-box {
-  flex: 1; min-width: 180px; max-width: 340px;
+  min-width: 0;
 }
 .comp-card .comp-images .img-box img {
-  width: 100%; border-radius: var(--radius);
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  height: auto;
+  max-height: 520px;
+  object-fit: contain;
+  background: #f5f5f4;
+  border-radius: var(--radius);
   border: 1px solid var(--border);
 }
 .comp-card .comp-images .img-box .img-label {
@@ -158,13 +180,72 @@ body {
   border-left: 3px solid var(--border);
 }
 
-/* ── Suggestions ── */
-.suggestion-list { list-style: none; }
-.suggestion-list li {
-  padding: 8px 0; border-bottom: 1px solid var(--border);
-  font-size: 14px;
+/* ── Feature comparison table ── */
+.feature-section {
+  margin-top: 16px;
 }
-.suggestion-list li::before { content: "→ "; color: var(--accent); font-weight: 700; }
+.feature-section h4 {
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+.feature-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 13px;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.feature-table th,
+.feature-table td {
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+  vertical-align: top;
+  text-align: left;
+}
+.feature-table th {
+  background: #f5f5f4;
+  font-weight: 600;
+}
+.feature-table th:nth-child(1),
+.feature-table td:nth-child(1) {
+  width: 22%;
+}
+.feature-table th:nth-child(2),
+.feature-table td:nth-child(2) {
+  width: 18%;
+}
+.fsim-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.fsim-badge.high { background: var(--risk-high-bg); color: var(--risk-high); }
+.fsim-badge.medium { background: var(--risk-medium-bg); color: var(--risk-medium); }
+.fsim-badge.low { background: var(--risk-lowmid-bg); color: var(--risk-lowmid); }
+.fsim-badge.none { background: var(--risk-undetermined-bg); color: var(--risk-undetermined); }
+.fusion-note {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding: 10px 14px;
+  background: #f5f5f4;
+  border-radius: 6px;
+}
+.target-warning {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-left: 3px solid #f97316;
+  border-radius: 6px;
+  color: #9a3412;
+  font-size: 13px;
+  line-height: 1.6;
+}
 
 /* ── Limitations ── */
 .limitation-text {
@@ -184,8 +265,7 @@ body {
 @media (max-width: 640px) {
   .summary-card { flex-direction: column; }
   .summary-card .query-img { flex: 0 0 auto; max-width: 200px; }
-  .comp-card .comp-images { flex-direction: column; }
-  .comp-card .comp-images .img-box { max-width: 100%; }
+  .comp-card .comp-images { grid-template-columns: 1fr; }
 }
 """
 
@@ -202,6 +282,33 @@ def _feature_similarity_label(sim: str) -> str:
 def _feature_similarity_class(sim: str) -> str:
     """特征相似度 CSS 类"""
     return sim if sim in ("high", "medium", "low", "none") else "none"
+
+
+def _collect_unable_reasons(results: list[dict[str, Any]], limit: int = 4) -> list[str]:
+    reasons: list[str] = []
+    for item in results:
+        if item.get("risk_level") != "unable_to_determine":
+            continue
+        precheck = item.get("local_precheck", {})
+        for reason in precheck.get("reliability_issues", []) or []:
+            if reason and reason not in reasons:
+                reasons.append(str(reason))
+        for reason in item.get("limitations", []) or []:
+            if reason and reason not in reasons:
+                reasons.append(str(reason))
+        ai = item.get("ai_visual_comparison", {})
+        for reason in ai.get("limitations", []) or []:
+            if reason and reason not in reasons:
+                reasons.append(str(reason))
+        for reason in item.get("basis", []) or []:
+            text = str(reason)
+            if any(keyword in text for keyword in ["质量", "未检测", "多张人脸", "无法可靠", "比对失败"]):
+                if text not in reasons:
+                    reasons.append(text)
+        if len(reasons) >= limit:
+            break
+    return reasons[:limit]
+
 
 def _build_feature_table(feature_comparison: dict[str, Any]) -> str:
     """构建结构化特征对比表格 HTML。"""
@@ -227,7 +334,7 @@ def _build_feature_table(feature_comparison: dict[str, Any]) -> str:
         rows.append(f'<tr><td>{label}</td><td><span class="fsim-badge {sim_cls}">{sim_label}</span></td><td>{note}</td></tr>')
     if not rows:
         return ""
-    return '<div class="feature-section"><h4>🔍 多模态面部特征分析</h4><table class="feature-table"><thead><tr><th>特征维度</th><th>相似度</th><th>分析说明</th></tr></thead><tbody>' + "".join(rows) + '</tbody></table></div>'
+    return '<div class="feature-section"><h4>多模态面部特征分析</h4><table class="feature-table"><thead><tr><th>特征维度</th><th>相似度</th><th>分析说明</th></tr></thead><tbody>' + "".join(rows) + '</tbody></table></div>'
 
 
 def generate_html_report(
@@ -263,6 +370,12 @@ def generate_html_report(
         "unable_to_determine": "部分或全部比对对象无法可靠判断，建议人工复核。",
     }
     verdict = verdict_map.get(highest_risk, verdict_map["unable_to_determine"])
+    unable_reasons_html = ""
+    if highest_risk == "unable_to_determine":
+        unable_reasons = _collect_unable_reasons(results)
+        if unable_reasons:
+            items = "".join(f"<li>{reason}</li>" for reason in unable_reasons)
+            unable_reasons_html = f'<div class="verdict-reasons"><strong>无法判断原因：</strong><ul>{items}</ul></div>'
 
     # ── 风险分布 badges ──
     risk_badges_html = ""
@@ -296,29 +409,30 @@ def generate_html_report(
         # 本地预检信息
         precheck = item.get("local_precheck", {})
         face_sim = precheck.get("face_similarity")
-        face_sim_str = f"InsightFace 余弦相似度: {face_sim:.4f}" if face_sim is not None else ""
+        is_path_b = str(item.get("analysis_path", "")).upper() == "B"
+        face_sim_str = f"InsightFace 余弦相似度: {face_sim:.4f}" if face_sim is not None and not is_path_b else ""
+        embedding_note = "风格化路径：不采用本地人脸 embedding 作为判断依据" if is_path_b else ""
         faces_a = precheck.get("faces_a", "?")
         faces_b = precheck.get("faces_b", "?")
         quality_a = precheck.get("quality_a", {}).get("grade", "?")
         quality_b = precheck.get("quality_b", {}).get("grade", "?")
+        target_warning_html = ""
+        if isinstance(faces_a, int) and faces_a > 1:
+            target_warning_html = '<div class="target-warning"><strong>目标对象提示：</strong>图片 A 检测到多张人脸，当前结果无法确认比对目标。建议先裁剪到单一目标人脸，或指定需要排查的具体人物后重新检测。</div>'
+        elif isinstance(faces_b, int) and faces_b > 1:
+            target_warning_html = '<div class="target-warning"><strong>目标对象提示：</strong>图片 B 检测到多张人脸，当前结果无法确认比对目标。建议先裁剪到单一目标人脸，或指定需要排查的具体人物后重新检测。</div>'
 
         # ── 多模态特征对比 ──
         feature_html = ""
-        card_suggestions_html = ""
         fusion_note_html = ""
         if ai:
             fc = ai.get("feature_comparison")
             if fc:
                 feature_html = _build_feature_table(fc)
-            # 每条候选的专属修改建议
-            mod_sugs = ai.get("modification_suggestions", [])
-            if mod_sugs:
-                sug_items = "".join(f"<li>{s}</li>" for s in mod_sugs)
-                card_suggestions_html = f'<div class="card-suggestions"><h4>💡 针对性修改建议</h4><ul>{sug_items}</ul></div>'
             # Path A 融合说明
             fusion = ai.get("insightface_fusion_note", "")
             if fusion:
-                fusion_note_html = f'<div class="fusion-note">📊 {fusion}</div>'
+                fusion_note_html = f'<div class="fusion-note">{fusion}</div>'
 
         comp_cards_html += f"""
 <div class="comp-card">
@@ -343,9 +457,10 @@ def generate_html_report(
     <span class="detail-item"><strong>人脸数：</strong>A{faces_a} / B{faces_b}</span>
     <span class="detail-item"><strong>画质：</strong>A-{quality_a} / B-{quality_b}</span>
     {f'<span class="detail-item"><strong>{face_sim_str}</strong></span>' if face_sim_str else ''}
+    {f'<span class="detail-item"><strong>{embedding_note}</strong></span>' if embedding_note else ''}
   </div>
+  {target_warning_html}
   {feature_html}
-  {card_suggestions_html}
   {fusion_note_html}
   <div class="comp-basis">{basis_html}</div>
 </div>"""
@@ -362,8 +477,8 @@ def generate_html_report(
 <body>
 
 <div class="toolbar">
-  <button onclick="downloadHTML()">⬇ 下载 HTML</button>
-  <button class="primary" onclick="window.print()">🖨 导出 PDF</button>
+  <button onclick="downloadHTML()">下载 HTML</button>
+  <button class="primary" onclick="window.print()">导出 PDF</button>
 </div>
 
 <div class="container">
@@ -382,22 +497,13 @@ def generate_html_report(
       <h2>综合风险等级：{_risk_badge_html(highest_risk)}</h2>
       <div class="risk-dist">{risk_badges_html}</div>
       <div class="verdict {highest_risk}">{verdict}</div>
+      {unable_reasons_html}
     </div>
   </div>
 
   <div class="section">
     <h2>详细比对结果</h2>
     {comp_cards_html}
-  </div>
-
-  <div class="section">
-    <h2>修改建议</h2>
-    <ul class="suggestion-list">
-      <li>调整脸型轮廓、下颌线和脸长比例</li>
-      <li>改变眼距、眼型、眉形或鼻口比例</li>
-      <li>更换发型、发际线、配饰和标志性妆造</li>
-      <li>对高风险候选进入人工复核后再决定是否二次生成</li>
-    </ul>
   </div>
 
   <div class="section">
