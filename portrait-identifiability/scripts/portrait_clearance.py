@@ -17,6 +17,7 @@ from face_engine import detect_faces
 from visual_compare import compare_images
 from multimodal_config import detect_provider, print_provider_detection, resolve_provider
 from html_report import save_html_report
+from docx_report import save_docx_report
 
 
 def _build_pairs(query_image, reference_image=None, candidates_file=None, candidate_dir=None):
@@ -255,7 +256,14 @@ def run_portrait_clearance(
         multimodal_provider=provider_info,
         total_pairs=len(results),
     )
-    output = {"mode": "portrait_clearance", "status": "success", "query_image": str(Path(query_image).resolve()), "output_dir": str(out_dir.resolve()), "total_pairs_compared": len(results), "multimodal_enabled": _use_mm, "vision_provider": vision_provider, "multimodal_detection": {"source": detection.source if detection else "not_checked", "message": detection.message if detection else ""}, "results": results, "report_md_path": str(report_path), "report_html_path": str(html_path), "report_json_path": str(out_dir / "clearance-result.json")}
+    docx_path = save_docx_report(
+        query_image=query_image,
+        results=results,
+        output_dir=out_dir,
+        multimodal_provider=provider_info,
+        total_pairs=len(results),
+    )
+    output = {"mode": "portrait_clearance", "status": "success", "query_image": str(Path(query_image).resolve()), "output_dir": str(out_dir.resolve()), "total_pairs_compared": len(results), "multimodal_enabled": _use_mm, "vision_provider": vision_provider, "multimodal_detection": {"source": detection.source if detection else "not_checked", "message": detection.message if detection else ""}, "results": results, "report_md_path": str(report_path), "report_html_path": str(html_path), "report_docx_path": str(docx_path), "report_json_path": str(out_dir / "clearance-result.json")}
     save_json(out_dir / "clearance-result.json", output)
     return output
 
@@ -297,6 +305,8 @@ def main():
     # 输出 HTML 报告路径
     if "report_html_path" in result:
         print("  HTML: " + str(result["report_html_path"]))
+    if "report_docx_path" in result:
+        print("  DOCX: " + str(result["report_docx_path"]))
 
 if __name__ == "__main__":
     main()

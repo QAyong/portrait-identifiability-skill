@@ -50,6 +50,8 @@ python portrait-identifiability/scripts/portrait_clearance.py query.png -r ref.p
 ## 辅助脚本
 
 - portrait_clearance.py     主入口：统一撞脸排查流水线
+- docx_report.py             DOCX 文档报告生成器
+- html_report.py             HTML 页面报告生成器
 - visual_compare.py          统一视觉比对引擎
 - multimodal_config.py       多模态配置与自检
 - face_engine.py             InsightFace 人脸引擎
@@ -64,22 +66,24 @@ python portrait-identifiability/scripts/portrait_clearance.py query.png -r ref.p
 
 ## 输出与报告
 
-排查完成后在输出目录生成三份文件：
+排查完成后在输出目录生成四份文件：
 
-- `clearance-report.html` — **HTML 页面报告**（图片 base64 内嵌，可导出 PDF，可直接分享）
+- `clearance-report.html` — **HTML 页面报告**（图片 base64 内嵌，纯净展示，无按钮/脚本）
+- `clearance-report.docx` — **DOCX 文档报告**（A4 排版，紧凑表格，适合存档与分发）
 - `clearance-report.md` — Markdown 文本报告
 - `clearance-result.json` — 结构化 JSON 结果
 
 ### Agent 行为要求
 
-**脚本执行完成后，Agent 必须自动使用内置浏览器打开 HTML 报告。**
+**脚本执行完成后，Agent 必须自动使用内置浏览器打开 HTML 报告，并将 DOCX 文件提供给用户。**
 
-方法：从 stdout 输出中提取 `HTML: <path>` 行，获取报告路径，
-然后使用 `browser:control-in-app-browser` skill 打开 `file:///<path>`。
+方法：从 stdout 输出中提取 `HTML: <path>` 和 `DOCX: <path>` 行，获取报告路径，
+然后使用 `browser:control-in-app-browser` skill 打开 `file:///<path>` 展示 HTML 报告，
+同时告知用户 DOCX 文件路径供下载/打开。
 
 脚本本身不再调用系统浏览器（已移除 `webbrowser.open`），Agent 不要改用 `os.startfile` / `Start-Process` / `webbrowser` 等方式打开外部浏览器，必须通过内置浏览器 skill 展示报告。
 
-用户无需手动打开文件，报告应直接展示在 Codex 侧边栏浏览器中。
+用户无需手动打开文件，HTML 报告应直接展示在 Codex 侧边栏浏览器中，DOCX 文件路径应明确告知。
 
 ## 百度识图候选去重
 

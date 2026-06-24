@@ -1,10 +1,7 @@
 # -*- coding: utf-8 -*-
 """HTML 报告生成器 — 肖像权可识别性检测
 
-生成自包含的 HTML 页面报告，图片以 base64 内嵌，支持：
-- 浏览器直接打开查看
-- 一键导出 PDF（window.print）
-- 一键下载 HTML 文件
+生成自包含的 HTML 页面报告，图片以 base64 内嵌。
 """
 
 from __future__ import annotations
@@ -476,11 +473,6 @@ def generate_html_report(
 </head>
 <body>
 
-<div class="toolbar">
-  <button onclick="downloadHTML()">下载 HTML</button>
-  <button class="primary" onclick="window.print()">导出 PDF</button>
-</div>
-
 <div class="container">
 
   <div class="report-header">
@@ -516,21 +508,6 @@ def generate_html_report(
   </div>
 
 </div>
-
-<script>
-function downloadHTML() {{
-  var html = document.documentElement.outerHTML;
-  var blob = new Blob(['<!DOCTYPE html>\n' + html], {{type: 'text/html'}});
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement('a');
-  a.href = url;
-  a.download = 'portrait-clearance-report.html';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}}
-</script>
 
 </body>
 </html>"""
