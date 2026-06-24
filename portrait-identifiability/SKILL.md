@@ -49,20 +49,28 @@ python portrait-identifiability/scripts/portrait_clearance.py query.png -r ref.p
 
 ## 辅助脚本
 
-- portrait_clearance.py     主入口：统一撞脸排查流水线
-- docx_report.py             DOCX 文档报告生成器
-- html_report.py             HTML 页面报告生成器
-- visual_compare.py          统一视觉比对引擎
-- multimodal_config.py       多模态配置与自检
-- face_engine.py             InsightFace 人脸引擎
-- common.py                  公共工具
-- prepare_search_image.py    为百度识图裁剪人脸图
-- dedup_candidates.py       候选图前置去重（字节 + pHash 视觉近似，默认快速；--use-face 启用 ArcFace 双条件）
-- collect_reverse_image_candidates.py  百度识图聚合采集器
-- baidu_image_search_playwright.py     百度识图 Playwright 采集器
-- virtual_face_clearance.py  兼容包装器
-- batch_clearance.py         批量排查
+*公共模块：*
+- `common.py` — 公共工具（图片读写、相似度计算、JSON 序列化）
+- `face_engine.py` — InsightFace 人脸引擎（线程安全单例）
+- `multimodal_config.py` — 多模态配置与自检（API Key 检测、提供方解析）
 
+*核心流水线：*
+- `portrait_clearance.py` — 主入口：统一撞脸排查流水线
+- `visual_compare.py` — 统一视觉比对引擎（InsightFace 预检 + 多模态 AI 比对）
+- `batch_clearance.py` — 批量排查（委托给 portrait_clearance）
+- `virtual_face_clearance.py` — 兼容包装器（委托给 portrait_clearance）
+
+*报告生成：*
+- `html_report.py` — HTML 页面报告生成器（base64 内嵌图片，纯展示）
+- `docx_report.py` — DOCX 文档报告生成器（A4 排版，紧凑表格）
+
+*检索采集：*
+- `baidu_image_search_playwright.py` — 百度识图 Playwright 采集器
+- `collect_reverse_image_candidates.py` — 百度识图聚合采集器
+- `prepare_search_image.py` — 为外部检索裁剪人脸图
+
+*候选图处理：*
+- `dedup_candidates.py` — 候选图前置去重（字节 + pHash 可选 ArcFace 双条件）
 
 ## 输出与报告
 
