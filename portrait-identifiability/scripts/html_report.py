@@ -126,6 +126,27 @@ body {
 .badge.low { background: var(--risk-low-bg); color: var(--risk-low); }
 .badge.unable_to_determine { background: var(--risk-undetermined-bg); color: var(--risk-undetermined); }
 
+/* ── Author footer ── */
+.author-footer {
+  display: flex; align-items: center; gap: 16px;
+  margin-top: 32px; padding: 12px 0;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.author-footer .author-prefix {
+  font-weight: 600; color: var(--text);
+  font-size: 13px; margin-right: 4px;
+}
+.author-footer .author-icon {
+  display: flex; align-items: center; gap: 5px;
+  text-decoration: none; color: inherit;
+  transition: opacity .15s;
+}
+.author-footer .author-icon:hover { opacity: .75; }
+.author-footer .author-icon svg { width: 18px; height: 18px; flex-shrink: 0; }
+.author-footer .author-label { font-weight: 500; color: var(--text); }
+
 /* ── Section headers ── */
 .section { margin-bottom: 40px; }
 .section h2 {
@@ -333,6 +354,28 @@ def _build_feature_table(feature_comparison: dict[str, Any]) -> str:
         return ""
     return '<div class="feature-section"><h4>多模态面部特征分析</h4><table class="feature-table"><thead><tr><th>特征维度</th><th>相似度</th><th>分析说明</th></tr></thead><tbody>' + "".join(rows) + '</tbody></table></div>'
 
+# ── Author footer SVG icons (loaded from icons/ directory) ──
+_WECHAT_SVG = """<svg t="1782307030348" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="5006" xmlns:xlink="http://www.w3.org/1999/xlink" width="18" height="18"><path d="M669.3 369.4c9.8 0 19.6 0 29.4 1.6C671 245.2 536.9 152 383.2 152 211.6 152 71 269.7 71 416.8c0 85 45.8 156.9 124.2 210.9l-31.1 93.2L273.6 667c39.2 8.2 70.3 16.3 109.5 16.3 9.8 0 19.6 0 31.1-1.6-6.5-21.3-9.8-42.5-9.8-65.4 0.1-135.7 116.2-246.9 264.9-246.9z m-168.4-85c24.5 0 39.2 16.3 39.2 39.2 0 22.9-16.3 39.2-39.2 39.2-24.5 0-47.4-16.4-47.4-39.2 0-24.5 24.6-39.2 47.4-39.2z m-216.3 73.1c-24.7 0-47.8-16.2-47.8-38.8 0-24.3 24.7-38.8 47.8-38.8s39.5 16.2 39.5 38.8c0.1 22.7-16.4 38.8-39.5 38.8z" fill="#24DB5A" p-id="5007"></path><path d="M953.8 613c0-125.9-124.2-227.2-264.8-227.2-148.8 0-266.5 103-266.5 227.2 0 125.9 117.7 227.2 266.5 227.2 31.1 0 62.1-8.2 93.2-16.3l85 47.4-22.9-78.5c62.1-47.4 109.5-109.5 109.5-179.8z m-351.5-39.2c-14.7 0-31.1-14.7-31.1-31.1 0-14.7 16.3-31.1 31.1-31.1 22.9 0 39.2 16.3 39.2 31.1 0 16.4-14.7 31.1-39.2 31.1z m178-7.6c-14.8 0-31.3-14.6-31.3-30.7 0-14.6 16.5-30.7 31.3-30.7 23.1 0 39.5 16.2 39.5 30.7 0 16.2-16.4 30.7-39.5 30.7z" fill="#24DB5A" p-id="5008"></path></svg>"""
+
+_BILIBILI_SVG = """<svg t="1782307064386" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="6015" xmlns:xlink="http://www.w3.org/1999/xlink" width="18" height="18"><path d="M204.288 63.488c-8.704 8.192-16.896 20.48-18.944 26.624-3.584 11.776 12.8 62.464 20.48 62.464S235.52 176.128 235.52 184.32c0 16.384-17.92 26.112-47.104 26.112-34.816 0-104.448 27.648-128.512 51.2-9.216 8.704-26.112 33.792-37.888 56.32L0 358.4v469.504l21.504 40.448c24.576 47.616 35.84 59.392 82.944 84.992l40.96 22.528h722.944l40.96-19.968c51.712-24.576 72.704-45.056 95.744-94.72l17.92-38.4v-231.424l0.512-231.424-17.92-36.352c-9.216-20.48-28.16-47.104-42.496-59.904-31.232-30.208-86.528-54.272-122.368-54.272-54.272 0-65.024-22.528-26.624-57.856 20.48-18.432 23.04-25.088 23.04-45.568 0-19.968-3.584-28.16-16.896-41.984-9.216-9.216-22.528-16.896-29.696-16.896-11.776 0-34.304 9.216-40.448 16.896-1.536 1.536-35.84 35.328-75.776 74.24l-73.216 71.168-83.456-0.512c-45.568 0-88.064-2.56-93.696-4.608-5.632-2.56-38.4-31.232-72.704-65.024C249.856 40.448 235.008 32.256 204.288 63.488z m652.8 262.656c5.12 0.512 19.968 9.216 31.744 20.48l21.504 19.968 1.536 217.088c1.024 197.12 0.512 218.112-8.704 236.032-14.336 27.136-34.816 40.448-65.536 41.984-14.336 0.512-173.568 0.512-353.28 0l-326.144-1.536-45.056-45.056V373.248l20.992-22.528c15.872-17.92 25.6-23.552 41.984-25.088 16.384-1.024 634.88-0.512 680.96 0.512z" fill="#FB7299" p-id="6016"></path><path d="M279.04 502.272c-20.48 22.016-20.992 25.088-20.992 66.56 0 39.936 1.024 44.544 17.92 64 29.184 33.28 55.808 32.256 84.48-2.56 11.264-12.8 12.8-22.016 13.312-64 0-47.104-0.512-48.64-19.968-68.096-27.136-27.648-47.616-26.112-74.752 4.096z m393.216-3.584c-18.944 18.944-19.968 20.992-19.968 69.12 0 47.616 0.512 49.664 18.432 67.072 24.576 23.552 35.84 26.624 58.368 13.824 29.184-16.896 39.936-43.52 36.864-90.624-2.56-35.328-4.608-41.984-22.016-59.904-25.088-25.6-45.568-25.6-71.68 0.512z" fill="#FB7299" p-id="6017"></path></svg>"""
+
+
+def _author_footer_html() -> str:
+    """生成底部作者信息栏 HTML。"""
+    return f"""<div class="author-footer">
+  <span class="author-prefix">合规咨询/商务合作：</span>
+  <span class="author-icon">
+    {_WECHAT_SVG}
+    <span class="author-label">微信号：QAyong2001</span>
+  </span>
+  <a class="author-icon" href="https://space.bilibili.com/501456558?spm_id_from=333.337.0.0" target="_blank" rel="noopener">
+    {_BILIBILI_SVG}
+    <span class="author-label">B站：QAyong</span>
+  </a>
+</div>"""
+
+
+
 
 def generate_html_report(
     query_image: str,
@@ -506,6 +549,8 @@ def generate_html_report(
       本结果不能替代司法鉴定、律师意见或法院判断。
     </p>
   </div>
+
+{_author_footer_html()}
 
 </div>
 

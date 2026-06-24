@@ -18,6 +18,8 @@ from docx.oxml.ns import qn
 from docx.shared import Cm, Inches, Pt, RGBColor, Emu
 
 from common import data_url_for_image, risk_label, risk_score
+from svglib.svglib import svg2rlg
+from reportlab.graphics import renderPM
 
 
 _PAGE_WIDTH = Cm(21.0)
@@ -175,6 +177,129 @@ def _collect_unable_reasons(results: list[dict[str, Any]], limit: int = 5) -> li
         if len(reasons) >= limit:
             break
     return reasons[:limit]
+
+
+_ICONS_DIR = Path(__file__).resolve().parent / "icons"
+
+def _svg_to_png_bytes(svg_name: str, size: int = 20) -> io.BytesIO:
+    """将 icons/ 目录下的 SVG 转为 PNG bytes，用于嵌入 DOCX。"""
+    svg_path = _ICONS_DIR / svg_name
+    if not svg_path.exists():
+        return io.BytesIO()
+    drawing = svg2rlg(str(svg_path))
+    w, h = drawing.width, drawing.height
+    scale = size / max(w, h)
+    drawing.scale(scale, scale)
+    drawing.width = w * scale
+    drawing.height = h * scale
+    buf = io.BytesIO()
+    renderPM.drawToFile(drawing, buf, fmt="PNG")
+    buf.seek(0)
+    return buf
+
+
+def _add_author_footer(doc: Document) -> None:
+    """在文档底部添加作者信息栏（微信号 + B站）。"""
+    from docx.oxml import OxmlElement
+    from docx.opc.constants import RELATIONSHIP_TYPE as RT
+
+    # 微信图标
+    wechat_buf = _svg_to_png_bytes("微信.svg", size=20)
+    # B站图标
+    bilibili_buf = _svg_to_png_bytes("wf_B站.svg", size=20)
+
+    # 用一个无边框表格实现图标+文字左对齐
+    table = doc.add_table(rows=1, cols=5)
+    table.alignment = WD_TABLE_ALIGNMENT.LEFT
+    # Remove borders
+    tbl = table._tbl
+    tblPr = tbl.tblPr if tbl.tblPr is not None else tbl.makeelement(qn("w:tblPr"), {})
+    borders = tblPr.makeelement(qn("w:tblBorders"), {})
+    for edge in ("top", "left", "bottom", "right", "insideH", "insideV"):
+        element = borders.makeelement(qn(f"w:{edge}"), {
+            qn("w:val"): "none",
+            qn("w:sz"): "0",
+            qn("w:space"): "0",
+            qn("w:color"): "auto",
+        })
+        borders.append(element)
+    tblPr.append(borders)
+
+    # Col 0: "作者" label
+    cell_author = table.rows[0].cells[0]
+    cell_author.width = Cm(3.8)
+    p_author = cell_author.paragraphs[0]
+    p_author.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    run_author = p_author.add_run("合规咨询/商务合作：")
+    _set_run_font(run_author, size_pt=9, bold=True, color_hex="1C1917")
+
+    # Col 1: WeChat icon
+    cell0 = table.rows[0].cells[1]
+    cell0.width = Cm(0.7)
+    p0 = cell0.paragraphs[0]
+    p0.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    if wechat_buf.getvalue():
+        run0 = p0.add_run()
+        run0.add_picture(wechat_buf, width=Cm(0.55), height=Cm(0.55))
+
+    # Col 2: WeChat text
+    cell1 = table.rows[0].cells[2]
+    cell1.width = Cm(4.0)
+    p1 = cell1.paragraphs[0]
+    p1.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    run1 = p1.add_run("微信号：QAyong2001")
+    _set_run_font(run1, size_pt=9, color_hex="57534E")
+
+    # Col 3: Bilibili icon
+    cell2 = table.rows[0].cells[3]
+    cell2.width = Cm(0.7)
+    p2 = cell2.paragraphs[0]
+    p2.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    if bilibili_buf.getvalue():
+        run2 = p2.add_run()
+        run2.add_picture(bilibili_buf, width=Cm(0.55), height=Cm(0.55))
+
+    # Col 4: Bilibili text with hyperlink
+    cell3 = table.rows[0].cells[4]
+    cell3.width = Cm(4.0)
+    p3 = cell3.paragraphs[0]
+    p3.alignment = WD_ALIGN_PARAGRAPH.LEFT
+
+    # Add hyperlink relationship
+    r_id = doc.part.relate_to(
+        "https://space.bilibili.com/501456558?spm_id_from=333.337.0.0",
+        RT.HYPERLINK,
+        is_external=True,
+    )
+
+    hyperlink = OxmlElement("w:hyperlink")
+    hyperlink.set(qn("r:id"), r_id)
+
+    run_hl = OxmlElement("w:r")
+    rPr = OxmlElement("w:rPr")
+    rFonts = OxmlElement("w:rFonts")
+    rFonts.set(qn("w:ascii"), _BODY_FONT)
+    rFonts.set(qn("w:hAnsi"), _BODY_FONT)
+    rFonts.set(qn("w:eastAsia"), _BODY_FONT_EAST)
+    rPr.append(rFonts)
+    sz = OxmlElement("w:sz")
+    sz.set(qn("w:val"), "18")
+    rPr.append(sz)
+    color = OxmlElement("w:color")
+    color.set(qn("w:val"), "57534E")
+    rPr.append(color)
+    u = OxmlElement("w:u")
+    u.set(qn("w:val"), "single")
+    u.set(qn("w:color"), "2563EB")
+    rPr.append(u)
+    run_hl.append(rPr)
+    t = OxmlElement("w:t")
+    t.set(qn("xml:space"), "preserve")
+    t.text = "B站：QAyong"
+    run_hl.append(t)
+    hyperlink.append(run_hl)
+    p3._element.append(hyperlink)
+
 
 
 def generate_docx_report(
@@ -413,6 +538,9 @@ def generate_docx_report(
         _add_body(doc, "多张人脸场景需要先裁剪到单一目标人脸，或明确指定目标人物后重新检测。")
 
     _add_body(doc, "本结果不能替代司法鉴定、律师意见或法院判断。")
+
+    # 作者信息栏
+    _add_author_footer(doc)
 
     return doc
 
